@@ -17,13 +17,13 @@ states = c("h", "l")
 # all the probability is log transformed
 
 # transition matrixt
-transition.matrix = (matrix(data = log2(c(1-u, u, u, 1-u)), nrow = 2, ncol = 2, dimnames = list(c("h", "l"), c("h", "l"))))
+transition.matrix = (matrix(data = log(c(1-u, u, u, 1-u)), nrow = 2, ncol = 2, dimnames = list(c("h", "l"), c("h", "l"))))
 
 # emission probabilities tell you what is the change of landing on each side given that the particular die is selected
-emission.matrix = t(matrix(data = log2(c(emission_h,emission_l)), nrow = 4, ncol = 2, dimnames = list(c('A','C','G','T'), c('h', 'l'))))
+emission.matrix = t(matrix(data = log(c(emission_h,emission_l)), nrow = 4, ncol = 2, dimnames = list(c('A','C','G','T'), c('h', 'l'))))
 
 # the probability of begining with each state
-a0 = log2(c(0.5, 0.5))
+a0 = log(c(0.5, 0.5))
 names(a0)=c('h','l')
 
 # store probabilities and track state
@@ -123,3 +123,84 @@ for (l in 0:block){
 
 
 # (b) Forward and backward algorithms
+# define sum log probabilities function
+sumLogProb=function(a,b){
+    if (a > b){
+        return(a + log1p(exp(b-a)))
+    }else{
+        return(b + log1p(exp(a-b))) 
+    }
+}
+
+# forward probabilities
+# initial:
+fki = data.frame()
+
+# initialization:
+prob=NULL
+for (state in states){
+    fk1 = a0[state] + emission.matrix[state,seq[1]]
+    prob=c(prob,fk1)
+}
+fki = rbind(fki,prob)
+colnames(fki)  = states
+
+# forward iteration
+for (i in 2:length(seq)) {
+    prob=NULL
+    for (state.k in states){# for k
+        # sum of fj(i-1)*ajk
+        sum.temp=fki[i-1,]+transition.matrix[,state.k]
+        sumlog = sumLogProb(sum.temp[1],sum.temp[2])
+        prob.fki= emission.matrix[state.k,seq[i]] + sumlog
+            
+        prob=c(prob,prob.fki)
+    }
+    names(prob)=states
+    fki = rbind(fki,prob)
+}
+
+# backward probabilities
+# initial:
+bki = data.frame()
+
+# initialization:
+prob=c(1,1)
+bki = rbind(prob,bki)
+
+colnames(bki)  = states
+
+# backward iteration
+for (i in (length(seq)-1):1) {
+    prob=NULL
+    for (state.k in states){# for k
+        # sum of a*e*b
+        sum.temp=bki[1,] + transition.matrix[state.k,] + emission.matrix[,seq[i+1]]
+        sumlog = sumLogProb(sum.temp[1],sum.temp[2])
+        prob.bki= sumlog
+        
+        prob=c(prob,prob.bki)
+    }
+    names(prob)=states
+    bki = rbind(prob,bki)
+}
+
+# calculate h state probability
+probh=NULL
+fb=fki+bki
+for (i in 1:length(seq)){
+    temp=fb[i,]
+    sumlog=sumLogProb(temp[1],temp[2])
+    probh=c(probh,exp(fki[i,1]+bki[i,1]-sumlog))
+}
+
+# plot the result
+par(mar=c(5.1, 4.1, 8.1, 4.1), xpd=TRUE)
+plot(1:length(seq),probh,col="blue",pch=19,xlab="sequence position",ylab="P(x=h|y)")
+
+# viterbi result
+v.vec=rep(0.05,length(seq))
+v.vec[best.path=='h']=0.95
+points(1:length(seq),v.vec,col="green",pch=19)
+
+legend("topright", inset=c(0,-0.5), legend=c("Posterior probability","Viterbi"), pch=c(19,19),col=c("blue","green"))
