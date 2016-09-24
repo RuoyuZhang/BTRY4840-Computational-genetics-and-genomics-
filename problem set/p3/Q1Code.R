@@ -1,3 +1,4 @@
+rm(list=ls())
 # (a) Viterbi algorithm
 
 seq="TTTAGCACCGGATGCGGTATCAATCCTGGTATCGTTAAAGCCTAGTGTTTCAAAAGTTCGAAAAACGGGCCGCGCAGCCCCGGGGCGTTCCCGGTAGGCTCGCGGCGGCTGGAGCACAGCGCCGCCGCGCCAGGGGACCCGCCGACTCCGTGGGCGTTCGGACCGCCTGTGTCCCTTCCGGAAGGCCTGGCAGGGTCGCCTCTTCCCGGAGCGGCCGCCCACACCGCGGCGCATGCAGGGCCCCGGTACGTTGACGTCTCTGACCCGCCGCTGCGGTGCGCCGGCGCGCCCGGCCGGGCGCCCCGGCGCGGGGCTCCCACGAGGCCCGCATCACGCGCGCCACCCAGGTTACCGGGCTCGGCCGGTGGACCATCGGGAGGGGCGGGGGCGGACGCCCGACCCCGCGGGCCACTCCAGTTTCTTAACTTGATAACGAAGCACTGAATACAGAAACAAGTTAAATCTCCCGGGTGTCGACGCGGTCCTGGTAACTTTTCAAGTAGGGTCGGTCAATGAAGGAGTGTTAGGCCTGGCCCGCCGGAGGGTTGAAGGACGGGTACGCGGTGTCAACGCCCGCCCCGGTCCGCCGAAGTCCCCCTTCACCGAGGGCCGAGCCGTCCTGCCCCCGGAGTTTCGGCGCGACCCCTACCGGGCTGGCCGCCGGGCGGGAGTCCCGGCTGTGGGCGGCTGGTCACCGGGTTTGGACCTCGGCAGGACAGCAGTTTGCATTCATATACAGGAAAAACACTCCCCACATGTGGTAAATACGTTGAACAAAGTATGTTACCATGAATAAGTAGCACAGCTAGTATTTTGTTGTTAGCAAGGAAAATAAATTCGTAAATTATTATTAATACGTATTTATTGAGTACTTTATTAAACTAAATATGTAGTTGATATCAGGCTGACACAACAACATGGTCTAGCAAAGTTCCTAACATTGGTATTTACCGCCACTTGCAGGCTCGAGGCGCCAGAGGGGCCCTGCGCTAGGTGCGGC"
@@ -99,7 +100,7 @@ for (i in 2:length(GC.index)){
     
 }
 GC.intervals=rbind(GC.intervals,c(start,GC.index[length(GC.index)]))
-
+GC.intervals
 
 # print out
 linelength=50
@@ -204,3 +205,56 @@ v.vec[best.path=='h']=0.95
 points(1:length(seq),v.vec,col="green",pch=19)
 
 legend("topright", inset=c(0,-0.5), legend=c("Posterior probability","Viterbi"), pch=c(19,19),col=c("blue","green"))
+dev.off()
+
+# (c) 
+# write forward algorithm as a function
+forward=function(seq,transition.matrix,emission.matrix,states,a0){
+    fki = data.frame()
+    
+    # initialization:
+    prob=NULL
+    for (state in states){
+        fk1 = a0[state] + emission.matrix[state,seq[1]]
+        prob=c(prob,fk1)
+    }
+    fki = rbind(fki,prob)
+    colnames(fki)  = states
+    
+    # forward iteration
+    
+    for (i in 2:length(seq)) {
+        prob=NULL
+        for (state.k in states){# for k
+            # sum of fj(i-1)*ajk
+            sum.temp=fki[i-1,]+transition.matrix[,state.k]
+            sumlog = sumLogProb(sum.temp[1],sum.temp[2])
+            prob.fki= emission.matrix[state.k,seq[i]] + sumlog
+            
+            prob=c(prob,prob.fki)
+        }
+        names(prob)=states
+        fki = rbind(fki,prob)
+    }
+    return(fki)
+}
+
+
+# try different mu, different mu lead to different transition matrix
+mu=c(seq(0,0.02,0.001),0.1)
+logP=NULL
+for (u in mu){
+    transition.matrix = (matrix(data = log(c(1-u, u, u, 1-u)), nrow = 2, ncol = 2, dimnames = list(c("h", "l"), c("h", "l"))))
+    forward.all=forward(seq=seq,transition.matrix = transition.matrix,emission.matrix=emission.matrix,states=states,a0=a0)
+    forward.final=sumLogProb(forward.all[length(seq),1],forward.all[length(seq),2])
+    logP=c(logP,forward.final)
+}
+
+# which mu has highest log likelihood?
+mu[which.max(logP)]
+
+# plot likelihood function over mu
+plot(mu,logP,pch=19,xlab=expression(mu),ylab="lnP(y|mu)")
+abline(v = mu[which.max(logP)],col="red")
+
+
